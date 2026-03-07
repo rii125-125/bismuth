@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using ICSharpCode.AvalonEdit.Highlighting;
 
 namespace bismuthIDE;
 
@@ -19,5 +20,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        CodeEditor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("C#");
+    }
+
+    private void RunButton_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Click button!");
     }
 }
