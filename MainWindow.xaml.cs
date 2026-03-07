@@ -24,8 +24,12 @@ public partial class MainWindow : Window
         CodeEditor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinition("C#");
     }
 
-    private void RunButton_Click(object sender, RoutedEventArgs e)
+    private void OpenFileButton_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Click button!");
+        MessageBox.Show("Click \"OpenFile\"button!");
+    }
+    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Click \"OpenFolder\"button!");
     }
 }
