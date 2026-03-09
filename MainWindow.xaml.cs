@@ -10,6 +10,15 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using ICSharpCode.AvalonEdit.Highlighting;
 
+using System;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Collections.Generic;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Emit;
+
 namespace bismuthIDE;
 
 /// <summary>
@@ -34,15 +43,71 @@ public partial class MainWindow : Window
     }
     private void RunButton_Click(object sender, RoutedEventArgs e)
     {
-    // Output logs along with the current time
-    string timestamp = DateTime.Now.ToString("HH:mm:ss");
-    OutputLog.AppendText($"[{timestamp}] Execution has begun...\n");
+        OutputLog.Clear();
+        OutputLog.AppendText("--- コンパイル開始 ---\n");
 
-    // Retrieve the editor's contents and output them to the console (for testing)
-    string code = CodeEditor.Text;
-    OutputLog.AppendText($"Number of characters in the entered code: {code.Length}\n");
+        try
+        {
+            // 1. エディタからコードを取得
+            string codeToCompile = CodeEditor.Text;
 
-    // Automatically scroll to the bottom
-    OutputLog.ScrollToEnd();
+            // 2. 構文解析（コードの木構造を作る）
+            SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(codeToCompile);
+
+            // 3. コンパイル設定（標準的なライブラリを読み込む）
+            string assemblyName = System.IO.Path.GetRandomFileName();
+            var trustedAssemblies = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(System.IO.Path.PathSeparator);
+            var references = trustedAssemblies
+                .Select(path => MetadataReference.CreateFromFile(path))
+                .Cast<MetadataReference>()
+                .ToList();
+
+            CSharpCompilation compilation = CSharpCompilation.Create(
+                assemblyName,
+                syntaxTrees: new[] { syntaxTree },
+                references: references,
+                options: new CSharpCompilationOptions(OutputKind.ConsoleApplication));
+
+            // 4. メモリ上に出力
+            using (var ms = new MemoryStream())
+            {
+                EmitResult result = compilation.Emit(ms);
+
+                if (!result.Success)
+                {
+                    // エラーがあればコンソールに表示
+                    IEnumerable<Diagnostic> failures = result.Diagnostics.Where(diagnostic =>
+                        diagnostic.IsWarningAsError ||
+                        diagnostic.Severity == DiagnosticSeverity.Error);
+
+                    foreach (Diagnostic diagnostic in failures)
+                    {
+                        OutputLog.AppendText($"{diagnostic.Id}: {diagnostic.GetMessage()}\n");
+                    }
+                }
+                else
+                {
+                    OutputLog.AppendText("コンパイル成功！実行中...\n\n");
+
+                    // 5. 実行（メモリ上のアセンブリをロードしてMainを呼ぶ）
+                    ms.Seek(0, SeekOrigin.Begin);
+                    Assembly assembly = Assembly.Load(ms.ToArray());
+                    var entryPoint = assembly.EntryPoint;
+
+                    // 標準出力をキャプチャしてIDEのコンソールに向ける（簡易版）
+                    var sw = new StringWriter();
+                    Console.SetOut(sw);
+
+                    var parameters = entryPoint.GetParameters().Length > 0 ? new object[] { Array.Empty<string>() } : null;
+                    entryPoint.Invoke(null, parameters);
+
+                    OutputLog.AppendText(sw.ToString());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            OutputLog.AppendText($"エラー: {ex.Message}\n");
+        }
     }
 }
